@@ -3,6 +3,11 @@ WIDTH = 800
 HEIGHT = 600
 FPS = 60
 
+# параметры карты
+CELL_SIZE = 80
+GRID_WIDTH = 3
+GRID_HEIGHT = 2
+
 # простенькие цвета
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
