@@ -1,4 +1,5 @@
 from questions import *
+from typing import Literal
 
 class Button:
     def __init__(self, x, y, width, height, text, color, text_color=BLACK, font_size=36):
@@ -46,18 +47,18 @@ class Territory:
         self.rect = pygame.Rect(x, y, CELL_SIZE - 5, CELL_SIZE - 5)
         self.row = row
         self.col = col
-        self.owner = None
+        self.owner = NOBODY
         self.color = GRAY
 
     def draw(self, surface):
         pygame.draw.rect(surface, self.color, self.rect)
-        pygame.draw.rect(surface, BLACK, self.rect, 2)
+        pygame.draw.rect(surface, BLACK, self.rect, width=2)
 
-    def set_owner(self, owner):
+    def set_owner(self, owner : Literal[NOBODY, PLAYER, BOT]):
         self.owner = owner
-        if owner == 'player':
+        if owner == PLAYER:
             self.color = RED
-        elif owner == 'bot':
+        elif owner == BOT:
             self.color = BLUE
         else:
             self.color = GRAY
@@ -83,27 +84,11 @@ class Map:
                 row.append(Territory(x, y, r, c))
             self.grid.append(row)
 
-    def get_empty_territories(self):
-        empty = []
-        for row in self.grid:
-            for territory in row:
-                if territory.owner is None:
-                    empty.append(territory)
-        return empty
-
-    def get_player_territories(self):
+    def get_territories(self, owner : Literal[NOBODY, PLAYER, BOT]):
         territories = []
         for row in self.grid:
             for territory in row:
-                if territory.owner == 'player':
-                    territories.append(territory)
-        return territories
-
-    def get_bot_territories(self):
-        territories = []
-        for row in self.grid:
-            for territory in row:
-                if territory.owner == 'bot':
+                if territory.owner == owner:
                     territories.append(territory)
         return territories
 
@@ -118,12 +103,16 @@ class Map:
 
 
 class Game:
+    EXPLORATION = 0
+    FIGHTING = 1
+    GAME_OVER = 2
+
     def __init__(self, surface, col_count, row_count):
         self.surface = surface
         self.battlefield = Map(surface, col_count, row_count)
 
-        self.current_turn = random.choice(['player', 'bot'])
-        self.winner = None
+        self.current_turn = random.choice([PLAYER, BOT])
+        self.winner = NOBODY
         self.quiz = Quiz(surface)
         self.waiting_for_quiz = False
         self.selected_territory = None
@@ -139,22 +128,19 @@ class Game:
         self.font = pygame.font.Font(None, 36)
         self.big_font = pygame.font.Font(None, 72)
 
-        self.EXPLORATION = 0
         self.exploration_step = 0
-        self.FIGHTING = 1
         self.fighting_step = 0
-        self.GAME_OVER = 2
         self.current_state = 0
 
     # тупая версия
     def check_win(self) -> bool:
         """Возвращает True и устанавливает победителя. Иначе возвращает False."""
-        pt = self.battlefield.get_player_territories()
-        bt = self.battlefield.get_bot_territories()
+        pt = self.battlefield.get_territories(PLAYER)
+        bt = self.battlefield.get_territories(BOT)
 
-        if len(self.battlefield.get_empty_territories()) == 0:
+        if len(self.battlefield.get_territories(NOBODY)) == 0:
             self.current_state = self.GAME_OVER
-            self.winner = 'player' if len(pt) > len(bt) else 'bot'
+            self.winner = PLAYER if len(pt) > len(bt) else BOT
             return True
         return False
 
@@ -165,21 +151,21 @@ class Game:
         self.message_timer = pygame.time.get_ticks()
 
     def bot_move(self):
-        empty = self.battlefield.get_empty_territories()
+        empty = self.battlefield.get_territories(NOBODY)
         if empty:
             self.selected_territory = random.choice(empty)
             # ботяра отвечает на вопрос (80% шанс правильного ответа)
             bot_answer_correct = random.random() < 0.8
 
             if bot_answer_correct:
-                self.capture_territory(self.selected_territory, 'bot')
+                self.capture_territory(self.selected_territory, BOT)
                 self.show_temporary_message("Ботяра захватил территорию!")
             else:
                 self.show_temporary_message(f"Бот ошибся, дурачёк, что сказать...")
 
             self.selected_territory = None
 
-            self.current_turn = 'player'
+            self.current_turn = PLAYER
         else:
             self.check_win()
 
@@ -188,10 +174,10 @@ class Game:
             return
 
         # ищему куда тыкнул и запускаем квиз
-        if self.current_turn == 'player':
+        if self.current_turn == PLAYER:
             for row in self.battlefield.grid:
                 for territory in row:
-                    if territory.rect.collidepoint(pos) and territory.owner is None:
+                    if territory.rect.collidepoint(pos) and territory.owner == 0:
                         self.selected_territory = territory
                         self.waiting_for_quiz = True
                         self.quiz.new_question()
@@ -202,7 +188,7 @@ class Game:
         self.check_win()
         # смена хода
         if self.current_state != self.GAME_OVER:
-            self.current_turn = 'bot' if owner == 'player' else 'player'
+            self.current_turn = BOT if owner == PLAYER else PLAYER
 
     # делается то, что не зависит от игрока
     def update(self):
@@ -214,7 +200,7 @@ class Game:
             self.show_message = False
 
         # сидим ждём пока походит ботяра
-        if self.current_turn == 'bot' and not self.waiting_for_quiz and not self.show_message:
+        if self.current_turn == BOT and not self.waiting_for_quiz and not self.show_message:
             # сидим сидим
             if self.bot_timer == 0:
                 self.bot_timer = pygame.time.get_ticks()
@@ -231,7 +217,7 @@ class Game:
 
         # подсказки хода
         if self.current_state != self.GAME_OVER:
-            if self.current_turn == 'player':
+            if self.current_turn == PLAYER:
                 turn_text = self.font.render("ВАШ ХОД! Нажмите на свободную территорию", True, GREEN)
             else:
                 if self.bot_timer > 0:
@@ -269,7 +255,7 @@ class Game:
             overlay.fill(BLACK)
             self.surface.blit(overlay, (0, 0))
 
-            if self.winner == 'player':
+            if self.winner == PLAYER:
                 win_text = self.big_font.render("ПОБЕДИЛ ГЛИФИНДОЛ!1!", True, GREEN)
                 sub_text = self.font.render("Нажмите ESC для выхода", True, WHITE)
             else:
@@ -285,19 +271,19 @@ class Game:
     def handle_quiz_result(self, is_correct):
         if is_correct:
             if self.selected_territory:
-                self.capture_territory(self.selected_territory, 'player')
+                self.capture_territory(self.selected_territory, PLAYER)
                 self.show_temporary_message("Правильно!")
         else:
             self.show_temporary_message(f"Неправильно!")
-            self.current_turn = 'bot'
+            self.current_turn = BOT
 
         self.waiting_for_quiz = False
         self.selected_territory = None
 
     # отчистка для перезапуска игры
     def reset(self):
-        self.current_turn = random.choice(['player', 'bot'])
-        self.winner = None
+        self.current_turn = random.choice([PLAYER, BOT])
+        self.winner = NOBODY
         self.waiting_for_quiz = False
         self.selected_territory = None
         self.bot_timer = 0
