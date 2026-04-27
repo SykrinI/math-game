@@ -21,8 +21,8 @@ MENU = 0
 GAMEPLAY = 1
 current_state = 0
 
-# отрисовка меню
 def draw_menu():
+    '''Отрисовка меню'''
     # делаем фончик голубым
     screen.fill(LIGHT_BLUE)
     # создаём шрифт и надпись

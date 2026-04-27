@@ -8,6 +8,11 @@ CELL_SIZE = 80
 GRID_WIDTH = 3
 GRID_HEIGHT = 2
 
+# id участников
+NOBODY = 0
+PLAYER = 1
+BOT = 2
+
 # простенькие цвета
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
