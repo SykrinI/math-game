@@ -1,7 +1,6 @@
 import pygame
 import sys
-from config import *
-from game_objects import *
+from game import *
 
 # инициализируем
 pygame.init()
@@ -22,7 +21,7 @@ GAMEPLAY = 1
 current_state = 0
 
 def draw_menu() -> None:
-    '''Отрисовка меню'''
+    """Отрисовка меню"""
     # делаем фончик голубым
     screen.fill(LIGHT_BLUE)
     # создаём шрифт и надпись
