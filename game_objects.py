@@ -52,15 +52,14 @@ class Territory:
     """Класс "территории" - представляет из себя одну ячейку, которую можно захватить.
     Поддерживает отрисовку и работу с владельцем территории.
     Хранит положение прямоугольника, номер строки и столбца на карте и владельца."""
-    def __init__(self, x : int, y : int, row : int, col : int):
+    def __init__(self, x : int, y : int):
         # коллайдер
         self.rect = pygame.Rect(x, y, CELL_SIZE - 5, CELL_SIZE - 5)
-        # номер строки
-        self.row = row
-        # номер столбца
-        self.col = col
+        # соседи
+        self.neighbors : list[Territory] = []
         # владелец
         self.owner = NOBODY
+        self.temporary = False
         # цвет
         self.color = GRAY
 
@@ -69,56 +68,117 @@ class Territory:
         pygame.draw.rect(surface, self.color, self.rect)
         pygame.draw.rect(surface, BLACK, self.rect, width=2)
 
-    def set_owner(self, owner : Literal[NOBODY, PLAYER, BOT]) -> None:
+    def set_owner(self, owner : Literal[NOBODY, PLAYER, BOT], temporary : bool = False) -> None:
         """Сеттер. Задаёт владельца территории."""
         self.owner = owner
+        self.temporary = temporary
         if owner == PLAYER:
-            self.color = RED
+            if self.temporary:
+                self.color = PINK
+            else:
+                self.color = RED
         elif owner == BOT:
-            self.color = BLUE
+            if self.temporary:
+                self.color = LIGHT_BLUE
+            else:
+                self.color = BLUE
         else:
             self.color = GRAY
+            self.temporary = False
 
 
 class Map:
-    """Класс карты. Пока это просто row_count на col_count ячеек территории."""
-    def __init__(self, surface : pygame.Surface, col_count : int, row_count : int):
-        self.grid = []
+    """Класс карты. Хранит граф территорий, простую матрицу смежности и позиции территорий."""
+    def __init__(self, surface : pygame.Surface, territory_pos : list[(int, int)] = [],
+                 adjective_list : list[list[int]] = []):
+        self.graph : list[Territory] = []
         self.surface = surface
-        self.row_count = row_count
-        self.col_count = col_count
-        self.create_grid()
+        self.territory_position : list[(int, int)] = []
+        self.adjective_list : list[list[int]] = []
+        self.create_graph(territory_pos, adjective_list)
 
-    def create_grid(self) -> None:
-        """Создаёт решётку."""
-        start_x = (WIDTH - (CELL_SIZE * self.col_count)) // 2
-        start_y = (HEIGHT - (CELL_SIZE * self.row_count)) // 2
-
-        for r in range(self.row_count):
-            row = []
-            for c in range(self.col_count):
-                x = start_x + (CELL_SIZE * c)
-                y = start_y + (CELL_SIZE * r)
-                row.append(Territory(x, y, r, c))
-            self.grid.append(row)
+    def create_graph(self, territory_pos : list[(int, int)] = [],
+                     adjective_list : list[list[int]] = []) -> None:
+        """Создаёт граф по списку смежности с вершинами в указанных точках."""
+        self.graph = [Territory(*pos) for pos in territory_pos]
+        n = len(self.graph)
+        for terr_id in range(n):
+            neighbors = adjective_list[terr_id]
+            self.graph[terr_id].neighbors = [self.graph[one] for one in neighbors]
+        self.territory_position = territory_pos
+        self.adjective_list = adjective_list
 
     def get_territories(self, owner : Literal[NOBODY, PLAYER, BOT]) -> list[Territory]:
         """Возвращает список территорий, принадлежащих owner."""
         territories = []
-        for row in self.grid:
-            for territory in row:
-                if territory.owner == owner:
-                    territories.append(territory)
+        for territory in self.graph:
+            if territory.owner == owner:
+                territories.append(territory)
+        return territories
+
+    def get_neighbors(self, owner : Literal[PLAYER, BOT]) -> list[Territory]:
+        """Возвращает список территорий, с которыми граничит owner."""
+        territories = []
+        owner_territories = self.get_territories(owner)
+        for territory in owner_territories:
+            for neighbor in territory.neighbors:
+                if neighbor.owner != owner:
+                    territories.append(neighbor)
+        return territories
+
+    def get_able_to_capture(self, owner : Literal[PLAYER, BOT]) -> list[Territory]:
+        """Возвращает список свободных территорий, с которыми граничит owner."""
+        territories = []
+        owner_territories = self.get_territories(owner)
+        for territory in owner_territories:
+            for neighbor in territory.neighbors:
+                if neighbor.owner == NOBODY:
+                    territories.append(neighbor)
+        if len(territories) == 0:
+            return self.get_territories(NOBODY)
         return territories
 
     def reset(self) -> None:
-        """Пересоздаём решётку. Нужно для перезапуска игры."""
-        self.grid = []
-        self.create_grid()
+        """Пересоздаём граф. Нужно для перезапуска игры."""
+        self.create_graph(self.territory_position, self.adjective_list)
 
     def draw(self) -> None:
         """Отрисовка всех территорий на surface."""
-        for row in self.grid:
-            for territory in row:
-                territory.draw(self.surface)
+        for territory in self.graph:
+            territory.draw(self.surface)
 
+
+# сообщение (недоделан)
+class Message:
+    def __init__(self, alpha: int = 180):
+        self.alpha = alpha
+        self.is_show = False
+        self.text = ""
+
+        self.font = pygame.font.Font(None, 36)
+        self.big_font = pygame.font.Font(None, 72)
+
+    def show(self, text : str) -> None:
+        """Вспомогательная функция, запускает сообщение."""
+        self.is_show = True
+        self.text = text
+
+    def draw(self, surface : pygame.Surface) -> None:
+        """Рисует сообщение."""
+        if self.is_show:
+            overlay = pygame.Surface(surface.get_size())
+            overlay.set_alpha(self.alpha)
+            overlay.fill(BLACK)
+            surface.blit(overlay, (0, 0))
+
+            msg_rect = pygame.Rect(surface.width // 6, surface.height // 3, (surface.width * 2) // 3, 80)
+            pygame.draw.rect(surface, WHITE, msg_rect)
+            pygame.draw.rect(surface, BLACK, msg_rect, 3)
+
+            msg_text = self.font.render(self.text, True, BLACK)
+            msg_rect_text = msg_text.get_rect(center=(surface.width // 2, surface.height // 3 + 40))
+            surface.blit(msg_text, msg_rect_text)
+
+    def reset(self) -> None:
+        self.is_show = False
+        self.text = ""
