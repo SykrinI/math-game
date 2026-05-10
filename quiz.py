@@ -11,8 +11,7 @@ QUESTIONS = pd.read_csv("questions.csv")
 
 class Quiz:
     """"Класс квиза. Реализует создание и отрисовку вопросов."""
-    def __init__(self, surface : pygame.Surface):
-        self.surface = surface
+    def __init__(self):
         self.current_question = None
         self.current_button = None
         self.active = False
@@ -55,7 +54,7 @@ class Quiz:
                 return self.current_question[1] == button.text
         return None
 
-    def draw(self) -> None:
+    def draw(self, surface : pygame.Surface) -> None:
         """
         Отрисовка.
         """
@@ -66,23 +65,28 @@ class Quiz:
         overlay = pygame.Surface((WIDTH, HEIGHT))
         overlay.set_alpha(100)
         overlay.fill(BLACK)
-        self.surface.blit(overlay, (0, 0))
+        surface.blit(overlay, (0, 0))
 
         # окно викторины
         quiz_rect = pygame.Rect(WIDTH // 6, HEIGHT // 6, 2 * WIDTH // 3, 2 * HEIGHT // 3)
-        pygame.draw.rect(self.surface, WHITE, quiz_rect,  border_radius=12)
-        pygame.draw.rect(self.surface, BLACK, quiz_rect, 2,  border_radius=12)
+        pygame.draw.rect(surface, WHITE, quiz_rect,  border_radius=12)
+        pygame.draw.rect(surface, BLACK, quiz_rect, 2,  border_radius=12)
 
         # текст вопроcа
         q_text = self.font.render(self.current_question[0], True, BLACK)
         q_rect = q_text.get_rect(center=(WIDTH // 2, HEIGHT // 4))
-        self.surface.blit(q_text, q_rect)
+        surface.blit(q_text, q_rect)
 
         # кнопки
         for button in self.buttons:
-            button.draw(self.surface)
+            button.draw(surface)
 
         # Инструкция
         instr_text = self.small_font.render("Выберите один вариант", True, BLACK)
         instr_rect = instr_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 175))
-        self.surface.blit(instr_text, instr_rect)
+        surface.blit(instr_text, instr_rect)
+
+    def reset(self):
+        self.current_question = None
+        self.current_button = None
+        self.active = False
