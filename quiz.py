@@ -39,27 +39,42 @@ class Quiz:
             self.buttons[i].text = answers[i]
 
     # событие выбора ответа
-    def handle_event(self, event : pygame.Event) -> bool | None:
+    def handle_event(self, event : pygame.Event) -> str | None:
         """
         Обрабатывет событие выбора ответа игроком.
         Принимает событие. Если нажатия не было, возвращает None.
-        Если ответ верен возвращает True. Иначе - False.
+        Иначе возвращает текст нажатой кнопки.
         """
         if not self.active:
             return None
         # выбираем ответик
         for button in self.buttons:
             if button.handle_event(event):
-                self.active = False
-                return self.current_question[1] == button.text
+                return button.text
         return None
+
+    def set_answer(self, answer : str | None, player : Literal[PLAYER, BOT]) -> None:
+        """"Устанавливает цвет книпки, когда её выбирает один из игроков."""
+        if answer is None:
+            return
+        for button in self.buttons:
+            if button.text == answer:
+                if button.color == PINK or button.color == LIGHT_BLUE:
+                    button.color = PURPLE
+                else:
+                    button.color = PINK if player == PLAYER else LIGHT_BLUE
+                break
+
+    def backlight_correct_answer(self):
+        for button in self.buttons:
+            if button.text == self.current_question[1]:
+                button.backlight_color = GREEN
+                break
 
     def draw(self, surface : pygame.Surface) -> None:
         """
         Отрисовка.
         """
-        if not self.active:
-            return
 
         # затемнение фона (тёмное стёклышко)
         overlay = pygame.Surface((WIDTH, HEIGHT))
@@ -90,3 +105,14 @@ class Quiz:
         self.current_question = None
         self.current_button = None
         self.active = False
+        for button in self.buttons:
+            button.color = GRAY
+            button.backlight_color = BLACK
+            button.is_hovered = False
+
+    def reset_buttons(self):
+        for button in self.buttons:
+            button.color = GRAY
+            button.backlight_color = BLACK
+            button.is_hovered = False
+

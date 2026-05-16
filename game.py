@@ -4,34 +4,19 @@ from quiz import *
 class Game:
     """Основной класс игры."""
 
-    # общие состояния
-    EXPLORATION = 0
-    FIGHTING = 1
-    GAME_OVER = 2
-
-    # состояния "исследования"
-    BOT_CHOICE = 0
-    PLAYER_CHOICE = 1
-    QUIZ_WAIT = 2
-    QUIZ_CHOICE = 3
-    QUIZ_RESULT = 4
+    # состояния
+    BOT_EXPLORATION = 0
+    PLAYER_EXPLORATION = 1
+    BOT_CHOICE = 2
+    PLAYER_CHOICE = 3
+    QUIZ_WAIT = 4
+    QUIZ_CHOICE = 5
+    QUIZ_RESULT = 6
 
 
     def __init__(self, surface : pygame.Surface):
         self.surface = surface
-        # задаём позиции территорий и матрицу смежности.
-        # Надо: наверное, перенести это в Map, сделать файлик с 
-        # картами. Пока пусть такая карта будет.
-        territory_position = list()
-        start_x = (WIDTH - (CELL_SIZE * 3)) // 2
-        start_y = (HEIGHT - CELL_SIZE) // 3
-        for r in range(3):
-            for c in range(3):
-                x = start_x + (CELL_SIZE * r)
-                y = start_y + (CELL_SIZE * c)
-                territory_position.append((x, y))
-        adjective_list = [[max(x // 3 * 3, x - 1), min(x + 1, x // 3 * 3 + 2), max(x % 3, x - 3), min(x + 3, x % 3 + 6)] for x in range(9)]
-        self.battlefield = Map(surface, territory_position, adjective_list)
+        self.battlefield = Map(surface)
 
         self.selected_territories = []
 
@@ -43,18 +28,16 @@ class Game:
         self.quiz_timer = 0
         self.quiz_result_timer = 0
         self.quiz_result = []
+        self.selected_answers = []
 
         # всё для бота и огорода
         self.bot_timer = 0
 
-        # сообщение
-        self.message = Message()
-
         self.font = pygame.font.Font(None, 36)
         self.big_font = pygame.font.Font(None, 72)
 
-        self.current_step = self.BOT_CHOICE
-        self.current_state = self.EXPLORATION
+        self.current_state = self.BOT_EXPLORATION
+        self.game_over = False
 
 
     # тупая версия
@@ -64,7 +47,7 @@ class Game:
         bt = self.battlefield.get_territories(BOT)
         nt = self.battlefield.get_territories(NOBODY)
         if len(nt) == 0 or len(nt) == 1:
-            self.current_state = self.GAME_OVER
+            self.game_over = True
             self.winner = PLAYER if len(pt) > len(bt) else BOT
             return True
         return False
@@ -72,10 +55,19 @@ class Game:
 
     def update(self) -> None:
         """Главный метод. Обновляет все состояния игры."""
-        if self.current_state == self.GAME_OVER:
+        if self.game_over:
             return
 
-        if self.current_step == self.BOT_CHOICE: # бот выбирает территорию
+        if self.current_state == self.BOT_EXPLORATION:
+            # сначала ждёт
+            if self.bot_timer == 0:
+                self.bot_timer = pygame.time.get_ticks()
+            elif pygame.time.get_ticks() - self.bot_timer > 1000:
+                random.choice(self.battlefield.get_able_to_capture(BOT)).set_owner(BOT)
+                self.bot_timer = 0
+                self.current_state = self.PLAYER_EXPLORATION
+
+        if self.current_state == self.BOT_CHOICE: # бот выбирает территорию
             # сначала ждёт
             if self.bot_timer == 0:
                 self.bot_timer = pygame.time.get_ticks()
@@ -84,78 +76,99 @@ class Game:
                 self.selected_territories[0].set_owner(BOT, temporary=True)
 
                 self.bot_timer = 0
-                self.current_step = self.PLAYER_CHOICE
+                self.current_state = self.PLAYER_CHOICE
 
-        elif self.current_step == self.QUIZ_WAIT: # ожидание квиза
+        elif self.current_state == self.QUIZ_WAIT: # ожидание квиза
             if self.quiz_wait_timer == 0:
                 self.quiz_wait_timer = pygame.time.get_ticks()
             elif pygame.time.get_ticks() - self.quiz_wait_timer > 200:
                 self.quiz_wait_timer = 0
-                self.current_step = self.QUIZ_CHOICE
+                self.current_state = self.QUIZ_CHOICE
 
-        elif self.current_step == self.QUIZ_RESULT: # подведение итогов квиза
-            # в конце будет проверять победителя
-            if self.quiz_result_timer == 0:
-                self.quiz_result_timer = pygame.time.get_ticks()
-                self.message.show("Правильно!" if self.quiz_result[1] else "Неправильно!")
-            elif pygame.time.get_ticks() - self.quiz_result_timer > 1500:
-                self.quiz_result_timer = 0
-                self.quiz_result = []
-                self.message.is_show = False
-                self.check_win()
-                self.current_step = self.BOT_CHOICE
-
-
-    def event_update(self, event : pygame.Event) -> None:
-        """Обновляем атрибуты, зависящие от события event."""
-        if self.current_step == self.PLAYER_CHOICE: # игрок выбирает территорию
-            flag = False
-            # определяем территорию, куда будет ходить игрок: в соседние
-            # или в незанятую
-            territories_to_capture = self.battlefield.get_able_to_capture(PLAYER)
-            for territory in territories_to_capture:
-                if event.type == pygame.MOUSEBUTTONDOWN and territory.rect.collidepoint(event.pos):
-                    self.selected_territories.append(territory)
-                    self.selected_territories[1].set_owner(PLAYER, temporary=True)
-                    flag = True
-                    break
-                if flag:
-                    break
-            if flag:
-                self.current_step = self.QUIZ_WAIT
-        elif self.current_step == self.QUIZ_CHOICE: # квиз
+        elif self.current_state == self.QUIZ_CHOICE:  # квиз
             if self.quiz_timer == -1:
                 self.selected_territories[0].set_owner(BOT if self.quiz_result[0] else NOBODY)
                 self.selected_territories[1].set_owner(PLAYER if self.quiz_result[1] else NOBODY)
                 self.selected_territories = []
                 self.quiz_timer = 0
-                self.quiz.reset()
-                self.current_step = self.QUIZ_RESULT
+                self.current_state = self.QUIZ_RESULT
             elif self.quiz_timer == 0:
                 self.quiz_timer = pygame.time.get_ticks()
                 self.quiz.new_question()
                 self.quiz_result.append(random.random() < 0.8)
-            elif pygame.time.get_ticks() - self.quiz_timer > 3000:
+                if self.quiz_result[0]:
+                    self.selected_answers.append(self.quiz.current_question[1] )
+                else:
+                    self.selected_answers.append(np.random.choice(self.quiz.current_question[2:]))
+            elif pygame.time.get_ticks() - self.quiz_timer > 4000:
                 self.quiz_timer = -1
                 self.quiz_result.append(False)
-            elif self.quiz_timer > 0:
+                self.selected_answers.append(None)
+
+
+        elif self.current_state == self.QUIZ_RESULT: # подведение итогов квиза
+            # в конце будет проверять победителя
+            if self.quiz_result_timer == 0:
+                self.quiz_result_timer = pygame.time.get_ticks()
+                self.quiz.reset_buttons()
+                self.quiz.set_answer(self.selected_answers[0], BOT)
+                self.quiz.set_answer(self.selected_answers[1], PLAYER)
+            elif pygame.time.get_ticks() - self.quiz_result_timer > 3000:
+                self.quiz_result_timer = 0
+                self.quiz_result = []
+                self.selected_answers = []
+                self.check_win()
+                self.quiz.reset()
+                self.current_state = self.BOT_CHOICE
+            elif pygame.time.get_ticks() - self.quiz_result_timer > 1500:
+                self.quiz.backlight_correct_answer()
+
+
+    def event_update(self, event : pygame.Event) -> None:
+        """Обновляем атрибуты, зависящие от события event."""
+        if self.current_state == self.PLAYER_EXPLORATION:
+            # определяем территорию, куда будет ходить игрок: в соседние или в незанятую
+            territories_to_capture = self.battlefield.get_able_to_capture(PLAYER)
+            for territory in territories_to_capture:
+                if event.type == pygame.MOUSEBUTTONDOWN and territory.rect.collidepoint(event.pos):
+                    territory.set_owner(PLAYER)
+                    self.current_state = self.BOT_CHOICE
+                    break
+
+        elif self.current_state == self.PLAYER_CHOICE: # игрок выбирает территорию
+            # определяем территорию, куда будет ходить игрок: в соседние или в незанятую
+            territories_to_capture = self.battlefield.get_able_to_capture(PLAYER)
+            for territory in territories_to_capture:
+                if event.type == pygame.MOUSEBUTTONDOWN and territory.rect.collidepoint(event.pos):
+                    self.selected_territories.append(territory)
+                    self.selected_territories[1].set_owner(PLAYER, temporary=True)
+                    self.current_state = self.QUIZ_WAIT
+                    break
+
+        elif self.current_state == self.QUIZ_CHOICE: # квиз
+            if self.quiz_timer > 0:
                 result = self.quiz.handle_event(event)
                 if result is not None:
                     self.quiz_timer = -1
-                    self.quiz_result.append(result)
+                    self.quiz_result.append(result == self.quiz.current_question[1])
+                    self.selected_answers.append(result)
 
 
     def draw(self) -> None:
         """Отрисовка всей игры."""
         self.surface.fill(WHITE)
 
-        self.battlefield.draw()
+        # помечаем зелёной обводкой территории, на которые можем сходить
+        if self.current_state in [self.PLAYER_CHOICE, self.PLAYER_EXPLORATION]:
+            self.battlefield.draw_with_able_to_capture()
+        else:
+            self.battlefield.draw()
 
         # подсказки хода
-        if self.current_step == self.PLAYER_CHOICE or self.current_step == self.BOT_CHOICE:
-            if self.current_step == self.PLAYER_CHOICE:
+        if self.current_state in [self.PLAYER_CHOICE, self.BOT_CHOICE, self.BOT_EXPLORATION, self.PLAYER_EXPLORATION]:
+            if self.current_state in [self.PLAYER_CHOICE, self.PLAYER_EXPLORATION]:
                 turn_text = self.font.render("ВАШ ХОД! Нажмите на свободную территорию", True, GREEN)
-            elif self.current_step == self.BOT_CHOICE:
+            elif self.current_state in [self.BOT_CHOICE, self.BOT_EXPLORATION]:
                 turn_text = self.font.render("ХОД БОТА...", True, BLUE)
             else:
                 turn_text = self.font.render("", True, BLACK)
@@ -163,15 +176,11 @@ class Game:
             self.surface.blit(turn_text, turn_rect)
 
         # викторина
-        if self.current_step == self.QUIZ_CHOICE:
+        if self.quiz.active: # будет рисоваться до конца quiz_result
             self.quiz.draw(self.surface)
 
-        # рисуем временное сообщение
-        if self.current_step == self.QUIZ_RESULT:
-            self.message.draw(self.surface)
-
         # награждение
-        if self.current_state == self.GAME_OVER:
+        if self.game_over:
             overlay = pygame.Surface((WIDTH, HEIGHT))
             overlay.set_alpha(200)
             overlay.fill(BLACK)
@@ -202,10 +211,9 @@ class Game:
         self.quiz_timer = 0
         self.quiz_result_timer = 0
         self.quiz_result = []
+        self.selected_answers = []
 
         self.bot_timer = 0
 
-        self.message.reset()
-
-        self.current_step = self.BOT_CHOICE
-        self.current_state = self.EXPLORATION
+        self.current_state = self.BOT_EXPLORATION
+        self.game_over = False
